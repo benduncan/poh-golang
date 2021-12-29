@@ -70,16 +70,13 @@ func (poh *POH) VerifyPOH(cpu_cores int) {
 	tasksize := 1_000_000
 	tasks := len(poh.Hash) / tasksize
 
-	// Submit 1000 tasks
+	// Submit X tasks
 	for i := 0; i < tasks; i++ {
 		n := i
 		pool.Submit(func() {
 
-			//block := count / 20
 			seqstart := n * tasksize
 			seqend := seqstart + tasksize
-
-			//fmt.Println(n, tasksize, seqstart, seqend)
 
 			for i := seqstart; i < seqend; i++ {
 
@@ -102,18 +99,14 @@ func (poh *POH) VerifyPOH(cpu_cores int) {
 
 				compare := bytes.Compare(proof, *orig)
 
-				if compare == 0 {
-					//fmt.Println("Proof match")
-				} else {
+				if compare == 1 {
 					log.Fatalf("Error! Proof does not match")
 					fmt.Printf("Seq Hash %d => %s\n", i, hex.EncodeToString(proof))
 					fmt.Printf("Orig Hash %d => %s\n", i, hex.EncodeToString(poh.Hash[i]))
-
 				}
 
 			}
 
-			//fmt.Printf("Running task #%d\n", n)
 		})
 	}
 
@@ -123,6 +116,7 @@ func (poh *POH) VerifyPOH(cpu_cores int) {
 	timer := time.Now()
 	elapsed := timer.Sub(start)
 
+	// Calculate the verification hashrate
 	poh.VerifyHashRate = int64(float64(len(poh.Hash)) * (1 / elapsed.Seconds()))
 	poh.VerifyHashRatePerCore = poh.VerifyHashRate / int64(cpu_cores)
 

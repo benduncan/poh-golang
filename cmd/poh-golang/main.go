@@ -9,8 +9,9 @@ import (
 
 func main() {
 
+	fmt.Println("Proof of History example")
 	cpu_cores := runtime.NumCPU()
-	fmt.Printf("CPU Cores %d\n", cpu_cores)
+	fmt.Printf("CPU Cores: %d\n", cpu_cores)
 
 	poh := poh_hash.New()
 	poh.GeneratePOH(10_000_000)
