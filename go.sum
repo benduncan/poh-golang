@@ -1,0 +1,4 @@
+github.com/alitto/pond v1.6.1 h1:dYs6GS0ts8fJ0nqSJz7lrc2s5MXW1XcINPl7R2VWzPE=
+github.com/alitto/pond v1.6.1/go.mod h1:/TYBaKCXvQ8Qiy3TfOoKeu6K7AVAhMpvu4itSpGdws0=
+github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
+github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
