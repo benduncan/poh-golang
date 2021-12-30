@@ -11,7 +11,7 @@ func BenchmarkGeneratePOH_10000(b *testing.B) {
 
 	for n := 0; n < b.N; n++ {
 		poh := poh_hash.New()
-		poh.GeneratePOH(10000)
+		poh.GeneratePOH(10_000)
 	}
 
 }

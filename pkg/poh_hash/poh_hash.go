@@ -14,39 +14,72 @@ import (
 
 const genisis_hash = "GENISIS_STRING"
 
-type POH struct {
-	Hash                  [][]byte
-	mu                    sync.RWMutex
-	HashRate              int64
-	VerifyHashRate        int64
-	VerifyHashRatePerCore int64
+type POH_Entry struct {
+	Hash []byte
+	Data []byte
+	Seq  uint64
 }
 
-func New() (poh POH) {
+type POH_Epoch struct {
+	Entry []POH_Entry
+	Epoch uint32
+}
+
+type POH struct {
+	POH                   map[uint32]POH_Epoch
+	HashRate              uint32
+	VerifyHashRate        uint32
+	VerifyHashRatePerCore uint32
+	TickRate              uint32
+	mu                    sync.RWMutex
+}
+
+func New() (this POH) {
+
+	// todo confirm make len vs append
+	this.POH = make(map[uint32]POH_Epoch)
+
+	this.TickRate = 10
+
 	return
 
 }
 
-func (poh *POH) GeneratePOH(count int) {
+func (this *POH) GeneratePOH(count int) {
 
 	start := time.Now()
-	poh.Hash = make([][]byte, count)
+
+	tickcount := count / int(this.TickRate)
+	this.POH[0] = POH_Epoch{Epoch: 1, Entry: make([]POH_Entry, tickcount)}
 
 	h := sha256.New()
 	h.Write([]byte(genisis_hash))
 
-	poh.mu.Lock()
-	poh.Hash[0] = h.Sum(nil)
-	poh.mu.Unlock()
+	this.mu.Lock()
+	this.POH[0].Entry[0] = POH_Entry{Hash: h.Sum(nil), Seq: 0}
+	this.mu.Unlock()
 
-	//fmt.Println("Genesis Hash ", hex.EncodeToString(poh.Hash[0]))
+	var prevhash []byte
 
-	for i := 1; i < count; i++ {
+	for i := uint64(1); i < uint64(count); i++ {
 		h := sha256.New()
-		h.Write([]byte(hex.EncodeToString(poh.Hash[i-1])))
-		poh.mu.Lock()
-		poh.Hash[i] = h.Sum(nil)
-		poh.mu.Unlock()
+
+		t := i % uint64(this.TickRate)
+
+		// Only save a state every X events (based on TickSize) to reduce memory allocation
+		if t == 0 {
+			a := i / uint64(this.TickRate)
+			h.Write([]byte(hex.EncodeToString(this.POH[0].Entry[a-1].Hash)))
+			hash := h.Sum(nil)
+			this.mu.Lock()
+			this.POH[0].Entry[a] = POH_Entry{Hash: hash, Seq: i}
+			this.mu.Unlock()
+		} else {
+			h.Write([]byte(hex.EncodeToString(prevhash)))
+			prevhash = h.Sum(nil)
+
+		}
+
 	}
 
 	timer := time.Now()
@@ -55,54 +88,66 @@ func (poh *POH) GeneratePOH(count int) {
 	//fmt.Printf("Poh (%d) loops processed in (%s)\n", count, elapsed)
 	//fmt.Printf("Loops processed in secs (%f) (%f)\n", elapsed.Seconds(), (1 / elapsed.Seconds()))
 
-	poh.HashRate = int64(float64(count) * (1 / elapsed.Seconds()))
+	this.HashRate = uint32(float64(count) * (1 / elapsed.Seconds()))
 
 	return
-
 }
 
-func (poh *POH) VerifyPOH(cpu_cores int) {
+func (this *POH) VerifyPOH(cpu_cores int) {
 
 	start := time.Now()
 
 	pool := pond.New(cpu_cores, 0, pond.MinWorkers(cpu_cores))
 
-	tasksize := 1_000_000
-	tasks := len(poh.Hash) / tasksize
+	// Distribute jobs on each core for the specified task-size
+	tasksize := uint64(100_000)
+	tasks := uint64(len(this.POH[0].Entry)) / tasksize
 
-	// Submit X tasks
-	for i := 0; i < tasks; i++ {
+	for i := uint64(0); i < tasks; i++ {
 		n := i
 		pool.Submit(func() {
 
 			seqstart := n * tasksize
 			seqend := seqstart + tasksize
 
+			var prevhash []byte
+
 			for i := seqstart; i < seqend; i++ {
 
-				var validate []byte
 				h := sha256.New()
 
-				if i == 0 {
-					validate = []byte(genisis_hash)
-					h.Write(validate)
+				t := i % uint64(this.TickRate)
+
+				if t == 0 {
+
+					var a uint64
+
+					// Confirm if the genisis block
+					if i == 0 {
+						h.Write([]byte(genisis_hash))
+					} else {
+						// Find the index of the last previous state 'save' from the TickRate
+						a = i / uint64(this.TickRate)
+						h.Write([]byte(hex.EncodeToString(this.POH[0].Entry[a-1].Hash)))
+					}
+
+					// Read lock
+					this.mu.RLock()
+					orig := this.POH[0].Entry[a].Hash
+					this.mu.RUnlock()
+
+					// Compare the proof to the original
+					compare := bytes.Compare(h.Sum(nil), orig)
+
+					if compare == 1 {
+						fmt.Printf("Seq Hash %d => %s\n", i, hex.EncodeToString(h.Sum(nil)))
+						fmt.Printf("Orig Hash %d => %s\n", i, hex.EncodeToString(orig))
+						log.Fatalf("Error! Proof does not match")
+					}
+
 				} else {
-					validate = poh.Hash[i-1]
-					h.Write([]byte(hex.EncodeToString(validate)))
-				}
-
-				proof := h.Sum(nil)
-
-				poh.mu.RLock()
-				orig := &poh.Hash[i]
-				poh.mu.RUnlock()
-
-				compare := bytes.Compare(proof, *orig)
-
-				if compare == 1 {
-					log.Fatalf("Error! Proof does not match")
-					fmt.Printf("Seq Hash %d => %s\n", i, hex.EncodeToString(proof))
-					fmt.Printf("Orig Hash %d => %s\n", i, hex.EncodeToString(poh.Hash[i]))
+					h.Write([]byte(hex.EncodeToString(prevhash)))
+					prevhash = h.Sum(nil)
 				}
 
 			}
@@ -117,7 +162,7 @@ func (poh *POH) VerifyPOH(cpu_cores int) {
 	elapsed := timer.Sub(start)
 
 	// Calculate the verification hashrate
-	poh.VerifyHashRate = int64(float64(len(poh.Hash)) * (1 / elapsed.Seconds()))
-	poh.VerifyHashRatePerCore = poh.VerifyHashRate / int64(cpu_cores)
+	this.VerifyHashRate = uint32(float64(len(this.POH[0].Entry)) * (1 / elapsed.Seconds()))
+	this.VerifyHashRatePerCore = this.VerifyHashRate / uint32(cpu_cores)
 
 }

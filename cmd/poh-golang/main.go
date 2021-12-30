@@ -10,6 +10,7 @@ import (
 func main() {
 
 	fmt.Println("Proof of History example")
+
 	cpu_cores := runtime.NumCPU()
 	fmt.Printf("CPU Cores: %d\n", cpu_cores)
 
