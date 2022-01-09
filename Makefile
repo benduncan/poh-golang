@@ -4,6 +4,7 @@ GO_PROJECT_NAME := poh-golang
 go_build:
 	@echo "\n....Building $(GO_PROJECT_NAME)"
 	go build -ldflags "-s -w" -o ./bin/ ./cmd/poh-golang
+	go build -ldflags "-s -w" -o ./bin/perry main.go
 
 go_dep_install:
 	@echo "\n....Installing dependencies for $(GO_PROJECT_NAME)...."
@@ -46,4 +47,4 @@ docker:
 	$(MAKE) test
 	docker buildx build --push --platform linux/arm/v7,linux/arm64/v8,linux/amd64 --tag calacode/$(GO_PROJECT_NAME):latest .
 
-.PHONY: docker db_seed go_build go_dep_install go_prep_install go_run build run restart
+.PHONY: docker db_seed go_build go_dep_install go_prep_install go_run build run restart test
